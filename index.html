@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recetario · LRU Consultoría</title>
+<style>
+  :root{
+    --ink:#0E1220; --navy:#1B2A4A; --navy2:#24365c; --gold:#B8862B; --gold-light:#e9d9b0;
+    --paper:#FBFAF7; --line:#e3e2dc; --muted:#6b7080; --white:#fff;
+    --danger:#b3402f; --danger-bg:#fbe9e6; --ok:#2f7a4d; --ok-bg:#e3f2e8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Helvetica Neue',Arial,sans-serif; background:var(--paper); color:var(--ink); font-size:15px; line-height:1.5;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select,textarea{font-family:inherit; font-size:15px;}
+  .hidden{display:none !important;}
+
+  /* ============ SCREENS ============ */
+  .screen{min-height:100vh; display:flex; flex-direction:column;}
+
+  /* ---- Login screen ---- */
+  #loginScreen{align-items:center; justify-content:center; padding:24px; background:linear-gradient(160deg,var(--navy) 0%,var(--navy2) 55%,#152238 100%); position:relative; overflow:hidden;}
+  #loginScreen::before{content:""; position:absolute; inset:0; opacity:.06; background-image:radial-gradient(circle at 20% 20%, #fff 0, transparent 40%), radial-gradient(circle at 80% 70%, #fff 0, transparent 35%);}
+  .login-card{background:var(--white); border-radius:18px; padding:40px 34px; max-width:380px; width:100%; box-shadow:0 30px 60px rgba(0,0,0,.35); position:relative; z-index:1;}
+  .login-logo{width:64px; height:64px; border-radius:50%; margin:0 auto 16px; display:block; object-fit:cover; box-shadow:0 4px 14px rgba(0,0,0,.15);}
+  .login-brand{text-align:center; font-size:11px; letter-spacing:3px; color:var(--gold); text-transform:uppercase; font-weight:700; margin-bottom:2px;}
+  .login-title{text-align:center; font-size:22px; font-weight:800; color:var(--navy); margin-bottom:22px;}
+  .pin-dots{display:flex; justify-content:center; gap:12px; margin:20px 0;}
+  .pin-dot{width:16px; height:16px; border-radius:50%; border:2px solid var(--navy); transition:.15s;}
+  .pin-dot.filled{background:var(--navy);}
+  .pin-dot.err{border-color:var(--danger); background:var(--danger);}
+  .pin-pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:8px;}
+  .pin-key{padding:16px 0; border-radius:12px; border:1px solid var(--line); background:#f8f8f6; font-size:19px; font-weight:700; color:var(--navy); transition:.1s;}
+  .pin-key:active{background:var(--gold-light);}
+  .pin-key.wide{grid-column:span 1;}
+  .pin-key.ghost{background:transparent; border:none; color:var(--muted); font-size:13px;}
+  .login-error{text-align:center; color:var(--danger); font-size:12.5px; margin-top:10px; min-height:16px; font-weight:600;}
+  .login-foot{text-align:center; margin-top:18px; font-size:11px; color:var(--muted);}
+
+  .gear-btn{position:fixed; bottom:18px; right:18px; width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center; z-index:5; backdrop-filter:blur(4px);}
+  .gear-btn:active{background:rgba(255,255,255,.22);}
+
+  /* ---- App shell (client form) ---- */
+  #appScreen{background:var(--paper);}
+  .topbar{background:var(--navy); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; box-shadow:0 2px 10px rgba(0,0,0,.15);}
+  .topbar .who{display:flex; align-items:center; gap:10px;}
+  .topbar .who img{width:32px; height:32px; border-radius:50%; object-fit:cover;}
+  .topbar .who-name{font-size:14px; font-weight:700;}
+  .topbar .who-sub{font-size:10px; color:var(--gold-light); text-transform:uppercase; letter-spacing:1px;}
+  .logout-btn{background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:#fff; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600;}
+
+  .wrap{max-width:760px; margin:0 auto; padding:20px 16px 90px;}
+
+  .form-card{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px;}
+  .form-card h2{font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--gold); font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+  .form-card h2::before{content:""; width:4px; height:16px; background:var(--gold); border-radius:2px; display:inline-block;}
+
+  .photo-box{width:100%; aspect-ratio:16/10; border-radius:12px; border:2px dashed var(--line); background:#faf9f7; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; cursor:pointer;}
+  .photo-box img{width:100%; height:100%; object-fit:cover;}
+  .photo-box .ph-hint{color:var(--muted); font-size:13px; text-align:center;}
+  .photo-box .ph-hint small{font-size:11px; opacity:.8;}
+  .photo-actions{display:flex; gap:8px; margin-top:10px;}
+  .photo-actions button{flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:12.5px; font-weight:600; color:var(--navy);}
+  .photo-actions button.remove{color:var(--danger); border-color:#f0d5d0;}
+  .photo-uploading{position:absolute; inset:0; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; font-size:12.5px; color:var(--navy); font-weight:600;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; font-weight:700; color:var(--navy); margin-bottom:5px;}
+  .field input, .field select, .field textarea{width:100%; padding:11px 13px; border:1px solid var(--line); border-radius:9px; background:#fafaf8; color:var(--ink);}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--gold); outline-offset:1px; background:#fff;}
+  .field textarea{resize:vertical; min-height:80px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .row3{display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px;}
+
+  .ing-row{display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;}
+  .ing-row input{padding:9px 10px; font-size:13.5px;}
+  .ing-del{width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--danger); font-size:15px;}
+  .add-ing-btn{margin-top:4px; padding:9px 14px; border-radius:8px; border:1.5px dashed var(--gold); background:#fff9ee; color:var(--gold); font-weight:700; font-size:12.5px; width:100%;}
+
+  .step-row{display:flex; gap:8px; margin-bottom:8px; align-items:flex-start;}
+  .step-num{width:26px; height:26px; border-radius:50%; background:var(--navy); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:5px;}
+  .step-row textarea{flex:1; min-height:44px;}
+  .step-del{width:34px; height:34px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--danger); font-size:15px; flex-shrink:0; margin-top:2px;}
+  .add-step-btn{margin-top:4px; padding:9px 14px; border-radius:8px; border:1.5px dashed var(--gold); background:#fff9ee; color:var(--gold); font-weight:700; font-size:12.5px; width:100%;}
+
+  .action-bar{position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); padding:12px 16px; display:flex; gap:10px; z-index:8; box-shadow:0 -4px 16px rgba(0,0,0,.06);}
+  .action-bar .wrap-inner{max-width:760px; margin:0 auto; display:flex; gap:10px; width:100%;}
+  .btn{flex:1; padding:13px; border-radius:10px; border:none; font-weight:700; font-size:13.5px; display:flex; align-items:center; justify-content:center; gap:6px;}
+  .btn-save{background:var(--navy); color:#fff;}
+  .btn-save:active{background:var(--navy2);}
+  .btn-secondary{background:#f0f0ee; color:var(--navy); flex:0.8;}
+
+  .toast{position:fixed; top:16px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; padding:11px 22px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.3s; pointer-events:none; z-index:99; box-shadow:0 8px 20px rgba(0,0,0,.2);}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(6px);}
+  .toast.ok{background:var(--ok);}
+
+  .saved-list{margin-top:6px;}
+  .saved-item{background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .saved-item .si-name{font-weight:700; font-size:13.5px; color:var(--navy);}
+  .saved-item .si-meta{font-size:11px; color:var(--muted);}
+  .saved-item .si-actions{display:flex; gap:6px;}
+  .mini-btn{padding:6px 10px; border-radius:7px; border:1px solid var(--line); background:#fff; font-size:11px; font-weight:600; color:var(--navy);}
+
+  /* ---- Admin panel ---- */
+  #adminScreen{background:var(--paper);}
+  .admin-topbar{background:var(--ink); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10;}
+  .admin-topbar .a-title{font-size:14px; font-weight:800; letter-spacing:.5px;}
+  .admin-topbar .a-sub{font-size:10px; color:#aab; text-transform:uppercase; letter-spacing:1px;}
+  .tabs{display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--line); padding:0 12px; position:sticky; top:56px; z-index:9; overflow-x:auto;}
+  .tab-btn{padding:13px 16px; border:none; background:none; font-size:12.5px; font-weight:700; color:var(--muted); border-bottom:3px solid transparent; white-space:nowrap;}
+  .tab-btn.active{color:var(--navy); border-bottom-color:var(--gold);}
+
+  .admin-wrap{max-width:900px; margin:0 auto; padding:20px 16px 60px;}
+  .section-title{font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); font-weight:700; margin:20px 0 10px;}
+
+  .client-card{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .client-card .cc-name{font-weight:800; color:var(--navy); font-size:14.5px;}
+  .client-card .cc-pin{font-family:monospace; font-size:13px; color:var(--gold); font-weight:700; letter-spacing:2px;}
+  .client-card .cc-meta{font-size:11px; color:var(--muted); margin-top:2px;}
+  .client-card .cc-actions{display:flex; gap:6px; flex-shrink:0;}
+  .pill{font-size:9.5px; padding:2px 8px; border-radius:8px; font-weight:700; text-transform:uppercase;}
+  .pill-active{background:var(--ok-bg); color:var(--ok);}
+  .pill-revoked{background:var(--danger-bg); color:var(--danger);}
+
+  .new-client-box{background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px;}
+  .new-client-box input{width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; margin-bottom:10px;}
+  .new-client-box .nc-row{display:flex; gap:8px;}
+  .new-client-box .nc-row input{flex:1;}
+  .btn-gold{background:var(--gold); color:var(--navy); border:none; padding:11px 18px; border-radius:9px; font-weight:800; font-size:13px;}
+
+  .recipe-admin-item{background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .recipe-admin-item .ra-name{font-weight:700; color:var(--navy); font-size:13.5px;}
+  .recipe-admin-item .ra-meta{font-size:11px; color:var(--muted);}
+  .check-mini{width:20px; height:20px; border-radius:5px; border:2px solid var(--line); flex-shrink:0;}
+  .check-mini.on{background:var(--gold); border-color:var(--gold);}
+
+  .logo-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:10px; margin-top:10px;}
+  .logo-slot{aspect-ratio:1; border:2px dashed var(--line); border-radius:10px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; background:#fff;}
+  .logo-slot img{width:100%; height:100%; object-fit:contain; padding:8px;}
+  .logo-slot .ls-del{position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; background:var(--danger); color:#fff; border:none; font-size:11px;}
+  .logo-slot.add{cursor:pointer; color:var(--muted); font-size:22px;}
+  .logo-slot .ls-label{position:absolute; bottom:0; left:0; right:0; background:rgba(27,42,74,.85); color:#fff; font-size:8.5px; padding:2px; text-align:center;}
+
+  .empty-state{text-align:center; padding:40px 20px; color:var(--muted); font-size:13px;}
+
+  .modal-bg{position:fixed; inset:0; background:rgba(15,18,32,.6); display:none; align-items:center; justify-content:center; z-index:60; padding:20px;}
+  .modal-bg.show{display:flex;}
+  .modal{background:#fff; border-radius:16px; padding:24px; max-width:420px; width:100%; max-height:85vh; overflow-y:auto;}
+  .modal h3{font-size:16px; color:var(--navy); margin-bottom:14px;}
+  .modal-actions{display:flex; gap:10px; margin-top:18px;}
+  .modal-actions button{flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13px;}
+  .modal-actions .cancel{background:#eef1f5; color:var(--navy);}
+  .modal-actions .ok{background:var(--gold); color:var(--navy);}
+  .modal-actions .danger{background:var(--danger); color:#fff;}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div class="screen" id="loginScreen">
+  <div class="login-card">
+    <img class="login-logo" id="loginLogo" src="" alt="Logo">
+    <div class="login-brand">LRU Consultoría</div>
+    <div class="login-title" id="loginTitle">Recetario</div>
+    <div class="pin-dots" id="pinDots"></div>
+    <div class="pin-pad" id="pinPad"></div>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-foot">Ingresa tu PIN de 4 dígitos</div>
+  </div>
+  <button class="gear-btn" id="gearBtn" title="Acceso administrador">⚙</button>
+</div>
+
+<!-- ============ CLIENT APP SCREEN ============ -->
+<div class="screen hidden" id="appScreen">
+  <div class="topbar">
+    <div class="who">
+      <img id="clientLogo" src="" alt="">
+      <div>
+        <div class="who-name" id="clientName">—</div>
+        <div class="who-sub">Recetario</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="logoutBtn">Salir</button>
+  </div>
+
+  <div class="wrap">
+    <div class="form-card">
+      <h2>Foto del plato</h2>
+      <div class="photo-box" id="photoBox">
+        <div class="ph-hint" id="photoHint">Toca para subir foto<br><small>del emplatado</small></div>
+        <img id="photoPreview" class="hidden">
+        <div class="photo-uploading hidden" id="photoUploading">Subiendo foto...</div>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" class="hidden">
+      <div class="photo-actions hidden" id="photoActions">
+        <button id="photoChangeBtn">Cambiar foto</button>
+        <button class="remove" id="photoRemoveBtn">Quitar foto</button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h2>Datos de la receta</h2>
+      <div class="field">
+        <label>Nombre del plato</label>
+        <input type="text" id="f-nombre" placeholder="Ej. Ceviche clásico">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Categoría</label>
+          <input type="text" id="f-categoria" placeholder="Ej. Entrada, Fondo, Postre">
+        </div>
+        <div class="field">
+          <label>N° de porciones</label>
+          <input type="number" id="f-porciones" placeholder="Ej. 1" min="1">
+        </div>
+      </div>
+      <div class="field">
+        <label>Alérgenos (opcional)</label>
+        <input type="text" id="f-alergenos" placeholder="Ej. Mariscos, gluten, lácteos">
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h2>Ingredientes</h2>
+      <div id="ingList"></div>
+      <button class="add-ing-btn" id="addIngBtn">+ Agregar ingrediente</button>
+    </div>
+
+    <div class="form-card">
+      <h2>Procedimiento</h2>
+      <div id="stepList"></div>
+      <button class="add-step-btn" id="addStepBtn">+ Agregar paso</button>
+    </div>
+
+    <div class="form-card">
+      <h2>Notas (opcional)</h2>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="f-notas" placeholder="Tips, variaciones, tiempo de conservación..."></textarea>
+      </div>
+    </div>
+
+    <div class="form-card" id="savedSection">
+      <h2>Tus recetas guardadas</h2>
+      <div class="saved-list" id="savedList"></div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <div class="wrap-inner">
+      <button class="btn btn-secondary" id="clearBtn">Limpiar</button>
+      <button class="btn btn-save" id="saveBtn">💾 Guardar receta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADMIN SCREEN ============ -->
+<div class="screen hidden" id="adminScreen">
+  <div class="admin-topbar">
+    <div>
+      <div class="a-title">Panel de Administración</div>
+      <div class="a-sub">LRU Consultoría</div>
+    </div>
+    <button class="logout-btn" id="adminLogoutBtn">Salir</button>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="clientes">Clientes</button>
+    <button class="tab-btn" data-tab="recetas">Recetas</button>
+    <button class="tab-btn" data-tab="logos">Banco de logos</button>
+  </div>
+
+  <div class="admin-wrap">
+    <!-- TAB: Clientes -->
+    <div id="tab-clientes">
+      <div class="new-client-box">
+        <div class="section-title" style="margin-top:0;">Nuevo cliente</div>
+        <input type="text" id="newClientName" placeholder="Nombre del cliente / marca">
+        <div class="nc-row">
+          <input type="text" id="newClientPin" placeholder="PIN de 4 dígitos" maxlength="4" inputmode="numeric">
+          <button class="btn-gold" id="createClientBtn">Crear acceso</button>
+        </div>
+      </div>
+      <div class="section-title">Clientes con acceso</div>
+      <div id="clientList"></div>
+    </div>
+
+    <!-- TAB: Recetas -->
+    <div id="tab-recetas" class="hidden">
+      <div class="section-title" style="margin-top:0;">Selecciona un cliente para ver sus recetas</div>
+      <select id="recetaClientSelect" style="width:100%; padding:11px; border-radius:9px; border:1px solid var(--line); margin-bottom:12px;"></select>
+
+      <div class="new-client-box" style="margin-bottom:16px;">
+        <div class="section-title" style="margin-top:0;">Recetario completo (todas las recetas del cliente)</div>
+        <select id="logoForExportSelect" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); margin-bottom:10px;"></select>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-gold" id="exportRecetarioPdfBtn" style="flex:1;">📄 PDF con marca</button>
+          <button class="btn-gold" id="exportRecetarioExcelBtn" style="flex:1; background:#e9d9b0;">📊 Excel</button>
+          <button class="btn-gold" id="exportRecetarioWordBtn" style="flex:1; background:#e9d9b0;">📝 Word</button>
+        </div>
+      </div>
+
+      <div class="section-title">Recetas individuales</div>
+      <div id="recetaListAdmin"></div>
+    </div>
+
+    <!-- TAB: Logos -->
+    <div id="tab-logos" class="hidden">
+      <div class="section-title" style="margin-top:0;">Banco de logos</div>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">Sube el logo de cada marca/cliente. Podrás elegir cuál usar al generar el recetario con diseño de marca.</p>
+      <div class="logo-grid" id="logoGrid"></div>
+      <input type="file" id="logoFileInput" accept="image/*" class="hidden">
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Modal: confirmación genérica -->
+<div class="modal-bg" id="modalConfirm">
+  <div class="modal">
+    <h3 id="confirmTitle">¿Confirmar?</h3>
+    <p id="confirmText" style="font-size:13px; color:var(--muted);"></p>
+    <div class="modal-actions">
+      <button class="cancel" id="confirmCancel">Cancelar</button>
+      <button class="danger" id="confirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: admin login -->
+<div class="modal-bg" id="modalAdminLogin">
+  <div class="modal">
+    <h3>Acceso administrador</h3>
+    <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px;">Ingresa tu clave de administrador.</p>
+    <input type="password" id="adminPassInput" placeholder="Clave" style="width:100%; padding:11px; border-radius:9px; border:1px solid var(--line); font-size:15px; letter-spacing:2px;">
+    <div class="login-error" id="adminLoginError"></div>
+    <div class="modal-actions">
+      <button class="cancel" id="adminLoginCancel">Cancelar</button>
+      <button class="ok" id="adminLoginOk">Ingresar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
