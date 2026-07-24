@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -23,7 +23,7 @@
   #loginScreen{align-items:center; justify-content:center; padding:24px; background:linear-gradient(160deg,var(--navy) 0%,var(--navy2) 55%,#152238 100%); position:relative; overflow:hidden;}
   #loginScreen::before{content:""; position:absolute; inset:0; opacity:.06; background-image:radial-gradient(circle at 20% 20%, #fff 0, transparent 40%), radial-gradient(circle at 80% 70%, #fff 0, transparent 35%);}
   .login-card{background:var(--white); border-radius:18px; padding:40px 34px; max-width:380px; width:100%; box-shadow:0 30px 60px rgba(0,0,0,.35); position:relative; z-index:1;}
-  .login-logo{width:64px; height:64px; border-radius:50%; margin:0 auto 16px; display:block; object-fit:cover; box-shadow:0 4px 14px rgba(0,0,0,.15);}
+  .login-logo{width:80px; height:80px; border-radius:50%; margin:0 auto 16px; display:block; object-fit:contain; background:#fff; box-shadow:0 4px 14px rgba(0,0,0,.15);}
   .login-brand{text-align:center; font-size:11px; letter-spacing:3px; color:var(--gold); text-transform:uppercase; font-weight:700; margin-bottom:2px;}
   .login-title{text-align:center; font-size:22px; font-weight:800; color:var(--navy); margin-bottom:22px;}
   .pin-dots{display:flex; justify-content:center; gap:12px; margin:20px 0;}
@@ -45,7 +45,7 @@
   #appScreen{background:var(--paper);}
   .topbar{background:var(--navy); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; box-shadow:0 2px 10px rgba(0,0,0,.15);}
   .topbar .who{display:flex; align-items:center; gap:10px;}
-  .topbar .who img{width:32px; height:32px; border-radius:50%; object-fit:cover;}
+  .topbar .who img{width:36px; height:36px; border-radius:50%; object-fit:contain; background:#fff;}
   .topbar .who-name{font-size:14px; font-weight:700;}
   .topbar .who-sub{font-size:10px; color:var(--gold-light); text-transform:uppercase; letter-spacing:1px;}
   .logout-btn{background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:#fff; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600;}
@@ -346,4 +346,4 @@
 <script type="module" src="firebase-init.js"></script>
 <script src="app.js"></script>
 </body>
-</html>
+</html> 
