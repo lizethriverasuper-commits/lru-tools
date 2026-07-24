@@ -2318,8 +2318,21 @@ function exportRecipeExcel(r) {
 // ============================================================
 // EXPORT: single recipe -> Word
 // ============================================================
+async function fetchImageAsUint8Array(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const buf = await blob.arrayBuffer();
+    return new Uint8Array(buf);
+  } catch (e) {
+    console.error("No se pudo descargar la foto para el Word:", e);
+    return null;
+  }
+}
+
 async function exportRecipeWord(r) {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType } = docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, ImageRun } = docx;
 
   const ingRows = [
     new TableRow({
@@ -2344,8 +2357,20 @@ async function exportRecipeWord(r) {
 
   const children = [
     new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: r.nombre, bold: true, color: "1B2A4A", size: 40 })] }),
-    new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: `${r.categoria || "Sin categoría"} · ${r.porciones || "-"} porciones`, italics: true, size: 22, color: "6b7080" })] }),
   ];
+
+  if (r.foto) {
+    const imgBytes = await fetchImageAsUint8Array(r.foto);
+    if (imgBytes) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 150, after: 200 },
+        children: [ new ImageRun({ type: "jpg", data: imgBytes, transformation: { width: 460, height: 290 } }) ],
+      }));
+    }
+  }
+
+  children.push(new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: `${r.categoria || "Sin categoría"} · ${r.porciones || "-"} porciones`, italics: true, size: 22, color: "6b7080" })] }));
 
   if (r.alergenos) {
     children.push(new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: "Alérgenos: ", bold: true, size: 22 }), new TextRun({ text: r.alergenos, size: 22 })] }));
@@ -2690,7 +2715,7 @@ async function exportRecetarioWord() {
   const recipes = STATE.recipes[clientId] || [];
   if (recipes.length === 0) { toast("Este cliente no tiene recetas guardadas.", true); return; }
 
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, PageBreak } = docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, PageBreak, ImageRun, AlignmentType } = docx;
 
   function cellHead(t) {
     return new TableCell({
@@ -2707,9 +2732,21 @@ async function exportRecetarioWord() {
     new Paragraph({ spacing: { after: 400 }, children: [new TextRun({ text: client.name, bold: true, color: "B8862B", size: 30 })] }),
   ];
 
-  recipes.forEach(r => {
+  for (const r of recipes) {
     children.push(new Paragraph({ children: [new PageBreak()] }));
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: r.nombre, bold: true, color: "1B2A4A", size: 36 })] }));
+
+    if (r.foto) {
+      const imgBytes = await fetchImageAsUint8Array(r.foto);
+      if (imgBytes) {
+        children.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 150, after: 200 },
+          children: [ new ImageRun({ type: "jpg", data: imgBytes, transformation: { width: 440, height: 275 } }) ],
+        }));
+      }
+    }
+
     children.push(new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: `${r.categoria || "Sin categoría"} · ${r.porciones || "-"} porciones`, italics: true, size: 22, color: "6b7080" })] }));
     if (r.alergenos) {
       children.push(new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: "Alérgenos: ", bold: true, size: 22 }), new TextRun({ text: r.alergenos, size: 22 })] }));
@@ -2728,7 +2765,7 @@ async function exportRecetarioWord() {
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 }, children: [new TextRun({ text: "Notas", bold: true, color: "B8862B", size: 26 })] }));
       children.push(new Paragraph({ children: [new TextRun({ text: r.notas, size: 22 })] }));
     }
-  });
+  }
 
   const doc = new Document({ sections: [{ children }] });
   const blob = await Packer.toBlob(doc);
