@@ -2435,7 +2435,6 @@ function renderSavedList() {
       </div>
       <div class="si-actions">
         <button class="mini-btn" data-action="edit" data-id="${r.id}">Editar</button>
-        <button class="mini-btn" data-action="excel" data-id="${r.id}">Excel</button>
         <button class="mini-btn" data-action="toggle" data-id="${r.id}">${r.active === false ? 'Reactivar' : 'Dar de baja'}</button>
       </div>
     `;
@@ -2444,8 +2443,7 @@ function renderSavedList() {
   list.querySelectorAll("[data-action]").forEach(btn => {
     btn.onclick = () => {
       const r = allRecipes.find(x => x.id === btn.dataset.id);
-      if (btn.dataset.action === "excel") exportRecipeExcel(r, currentClient);
-      else if (btn.dataset.action === "edit") loadRecipeToForm(r, currentClient.id);
+      if (btn.dataset.action === "edit") loadRecipeToForm(r, currentClient.id);
       else if (btn.dataset.action === "toggle") toggleRecipeActive(currentClient.id, r.id, renderSavedList);
     };
   });
@@ -2701,6 +2699,42 @@ function downloadFullBackup() {
   const fecha = new Date().toISOString().slice(0, 10);
   downloadBlob(blob, `Respaldo_Recetario_LRU_${fecha}.json`);
   toast("Respaldo descargado ✓");
+}
+
+function restoreFromBackupFile(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    let data;
+    try {
+      data = JSON.parse(ev.target.result);
+    } catch (e) {
+      toast("El archivo no es un respaldo JSON válido.", true);
+      return;
+    }
+    if (!data || !Array.isArray(data.clients) || typeof data.recipes !== "object") {
+      toast("El archivo no tiene el formato esperado de un respaldo.", true);
+      return;
+    }
+    const nClientes = data.clients.length;
+    const nRecetas = Object.values(data.recipes).reduce((sum, arr) => sum + (arr?.length || 0), 0);
+    confirmModal(
+      "Restaurar respaldo",
+      `Esto reemplazará TODOS los datos actuales por los del archivo: ${nClientes} cliente(s) y ${nRecetas} receta(s). Los logos guardados (imágenes) no se restauran, solo sus nombres. Esta acción no se puede deshacer. ¿Continuar?`,
+      async () => {
+        STATE.clients = data.clients || [];
+        STATE.recipes = data.recipes || {};
+        // Los logos del backup no traen dataUrl (se excluyó al exportar); conservamos los logos actuales tal cual están
+        await saveState();
+        toast("Respaldo restaurado ✓");
+        renderClientList();
+        renderRecetaClientSelect();
+        renderLogoGrid();
+        renderLogoForExportSelect();
+      }
+    );
+  };
+  reader.onerror = () => toast("No se pudo leer el archivo.", true);
+  reader.readAsText(file);
 }
 
 function renderClientList() {
@@ -3179,6 +3213,12 @@ async function init() {
 
   document.getElementById("createClientBtn").onclick = createClient;
   document.getElementById("downloadBackupBtn").onclick = downloadFullBackup;
+  document.getElementById("restoreBackupBtn").onclick = () => document.getElementById("restoreBackupInput").click();
+  document.getElementById("restoreBackupInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) restoreFromBackupFile(file);
+    e.target.value = "";
+  });
   document.getElementById("exportRecetarioPdfBtn").onclick = exportRecetarioBrandPdf;
   document.getElementById("exportRecetarioExcelBtn").onclick = exportRecetarioExcel;
   document.getElementById("exportRecetarioWordBtn").onclick = exportRecetarioWord;
