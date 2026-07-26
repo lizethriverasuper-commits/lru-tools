@@ -2121,6 +2121,60 @@ async function uploadPhotoIfNeeded(recipeId) {
   }
 }
 
+let returnToAdminAfterSave = false;
+
+function openAdminRecipeEditor(recipe, ownerClientId) {
+  const owner = STATE.clients.find(c => c.id === ownerClientId);
+  returnToAdminAfterSave = true;
+
+  document.getElementById("adminScreen").classList.add("hidden");
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appScreen").classList.remove("hidden");
+  document.getElementById("clientName").textContent = (owner ? owner.name : "Cliente") + " (editando como admin)";
+  document.getElementById("clientLogo").src = owner ? getClientLogo(owner) : DEFAULT_LOGO;
+  document.getElementById("logoutBtn").textContent = "Volver al panel admin";
+
+  loadRecipeToForm(recipe, ownerClientId);
+  renderSavedList_forAdminContext(ownerClientId);
+}
+
+// Cuando el admin edita, la sección "Tus recetas guardadas" del formulario
+// debe mostrar las recetas del cliente dueño, no las de un PIN propio.
+function renderSavedList_forAdminContext(ownerClientId) {
+  const list = document.getElementById("savedList");
+  const recipes = STATE.recipes[ownerClientId] || [];
+  if (recipes.length === 0) {
+    list.innerHTML = `<div class="empty-state">Este cliente aún no tiene recetas guardadas.</div>`;
+    return;
+  }
+  list.innerHTML = "";
+  recipes.slice().reverse().forEach(r => {
+    const item = document.createElement("div");
+    item.className = "saved-item";
+    const thumb = r.foto ? `<img src="${r.foto}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;margin-right:10px;flex-shrink:0;">` : "";
+    item.innerHTML = `
+      <div style="display:flex; align-items:center; flex:1; min-width:0;">
+        ${thumb}
+        <div style="min-width:0;">
+          <div class="si-name">${esc(r.nombre)}</div>
+          <div class="si-meta">${esc(r.categoria || "Sin categoría")} · ${r.ingredientes.length} ingredientes</div>
+        </div>
+      </div>
+      <div class="si-actions">
+        <button class="mini-btn" data-action="edit" data-id="${r.id}">Editar</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+  list.querySelectorAll("[data-action]").forEach(btn => {
+    btn.onclick = () => {
+      const r = recipes.find(x => x.id === btn.dataset.id);
+      loadRecipeToForm(r, ownerClientId);
+      renderSavedList_forAdminContext(ownerClientId);
+    };
+  });
+}
+
 function enterClientApp() {
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("adminScreen").classList.add("hidden");
@@ -2178,7 +2232,12 @@ function renumberSteps() {
   });
 }
 
+let editingRecipeId = null;   // si no es null, guardar() actualiza en vez de crear
+let editingClientId = null;   // dueño de la receta que se está editando (para admin)
+
 function clearForm() {
+  editingRecipeId = null;
+  editingClientId = null;
   document.getElementById("f-nombre").value = "";
   document.getElementById("f-categoria").value = "";
   document.getElementById("f-porciones").value = "";
@@ -2190,6 +2249,46 @@ function clearForm() {
   addIngredientRow();
   addIngredientRow();
   addStepRow();
+  updateSaveButtonLabel();
+}
+
+function updateSaveButtonLabel() {
+  const btn = document.getElementById("saveBtn");
+  if (!btn) return;
+  btn.innerHTML = editingRecipeId ? "💾 Actualizar receta" : "💾 Guardar receta";
+}
+
+function loadRecipeToForm(recipe, ownerClientId) {
+  editingRecipeId = recipe.id;
+  editingClientId = ownerClientId;
+
+  document.getElementById("f-nombre").value = recipe.nombre || "";
+  document.getElementById("f-categoria").value = recipe.categoria || "";
+  document.getElementById("f-porciones").value = recipe.porciones || "";
+  document.getElementById("f-alergenos").value = recipe.alergenos || "";
+  document.getElementById("f-notas").value = recipe.notas || "";
+
+  document.getElementById("ingList").innerHTML = "";
+  document.getElementById("stepList").innerHTML = "";
+  (recipe.ingredientes || []).forEach(i => addIngredientRow(i));
+  if ((recipe.ingredientes || []).length === 0) { addIngredientRow(); addIngredientRow(); }
+  (recipe.pasos || []).forEach(p => addStepRow(p));
+  if ((recipe.pasos || []).length === 0) addStepRow();
+
+  resetPhotoBox();
+  if (recipe.foto) {
+    currentPhotoUrl = recipe.foto;
+    currentPhotoDataUrl = null;
+    const preview = document.getElementById("photoPreview");
+    preview.src = recipe.foto;
+    preview.classList.remove("hidden");
+    document.getElementById("photoHint").classList.add("hidden");
+    document.getElementById("photoActions").classList.remove("hidden");
+  }
+
+  updateSaveButtonLabel();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  toast("Editando: " + recipe.nombre);
 }
 
 function collectFormData() {
@@ -2228,30 +2327,67 @@ async function saveRecipe() {
     return;
   }
 
-  const recipeId = uid("rec");
+  const targetClientId = editingClientId || currentClient.id;
+  const recipeId = editingRecipeId || uid("rec");
   const fotoUrl = await uploadPhotoIfNeeded(recipeId);
 
-  const recipe = {
-    id: recipeId,
-    foto: fotoUrl || "",
-    ...data,
-    savedAt: new Date().toISOString(),
-  };
+  if (!STATE.recipes[targetClientId]) STATE.recipes[targetClientId] = [];
 
-  if (!STATE.recipes[currentClient.id]) STATE.recipes[currentClient.id] = [];
-  STATE.recipes[currentClient.id].push(recipe);
+  if (editingRecipeId) {
+    const idx = STATE.recipes[targetClientId].findIndex(r => r.id === editingRecipeId);
+    const previous = idx > -1 ? STATE.recipes[targetClientId][idx] : {};
+    const updated = {
+      ...previous,
+      id: recipeId,
+      foto: fotoUrl || previous.foto || "",
+      ...data,
+      savedAt: previous.savedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (idx > -1) STATE.recipes[targetClientId][idx] = updated;
+    else STATE.recipes[targetClientId].push(updated);
+  } else {
+    const recipe = {
+      id: recipeId,
+      foto: fotoUrl || "",
+      ...data,
+      savedAt: new Date().toISOString(),
+    };
+    STATE.recipes[targetClientId].push(recipe);
+  }
+
   await saveState();
 
-  toast("Receta guardada ✓");
+  toast(editingRecipeId ? "Receta actualizada ✓" : "Receta guardada ✓");
+  const wasReturningToAdmin = returnToAdminAfterSave;
   clearForm();
-  renderSavedList();
+
+  if (wasReturningToAdmin) {
+    returnToAdminAfterSave = false;
+    document.getElementById("logoutBtn").textContent = "Salir";
+    document.getElementById("appScreen").classList.add("hidden");
+    document.getElementById("adminScreen").classList.remove("hidden");
+    renderClientList();
+    renderRecetaListAdmin();
+  } else if (adminMode) {
+    renderRecetaListAdmin();
+  } else {
+    renderSavedList();
+  }
 }
 
 function renderSavedList() {
   const list = document.getElementById("savedList");
-  const recipes = STATE.recipes[currentClient.id] || [];
-  if (recipes.length === 0) {
+  const allRecipes = STATE.recipes[currentClient.id] || [];
+  const query = (document.getElementById("savedSearch")?.value || "").trim().toLowerCase();
+  const recipes = query ? allRecipes.filter(r => r.nombre.toLowerCase().includes(query)) : allRecipes;
+
+  if (allRecipes.length === 0) {
     list.innerHTML = `<div class="empty-state">Aún no has guardado ninguna receta.</div>`;
+    return;
+  }
+  if (recipes.length === 0) {
+    list.innerHTML = `<div class="empty-state">No se encontró ninguna receta con ese nombre.</div>`;
     return;
   }
   list.innerHTML = "";
@@ -2269,6 +2405,7 @@ function renderSavedList() {
         </div>
       </div>
       <div class="si-actions">
+        <button class="mini-btn" data-action="edit" data-id="${r.id}">Editar</button>
         <button class="mini-btn" data-action="excel" data-id="${r.id}">Excel</button>
         <button class="mini-btn" data-action="word" data-id="${r.id}">Word</button>
       </div>
@@ -2277,9 +2414,10 @@ function renderSavedList() {
   });
   list.querySelectorAll("[data-action]").forEach(btn => {
     btn.onclick = () => {
-      const r = recipes.find(x => x.id === btn.dataset.id);
+      const r = allRecipes.find(x => x.id === btn.dataset.id);
       if (btn.dataset.action === "excel") exportRecipeExcel(r);
-      else exportRecipeWord(r);
+      else if (btn.dataset.action === "word") exportRecipeWord(r);
+      else loadRecipeToForm(r, currentClient.id);
     };
   });
 }
@@ -2287,7 +2425,43 @@ function renderSavedList() {
 // ============================================================
 // EXPORT: single recipe -> Excel
 // ============================================================
-function exportRecipeExcel(r) {
+function waitForLib(checkFn, name, maxWaitMs = 6000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const tick = () => {
+      if (checkFn()) { resolve(); return; }
+      if (Date.now() - start > maxWaitMs) {
+        reject(new Error(`${name} no cargó a tiempo`));
+        return;
+      }
+      setTimeout(tick, 150);
+    };
+    tick();
+  });
+}
+
+async function ensureDocx() {
+  try {
+    await waitForLib(() => typeof docx !== "undefined", "docx.js");
+    return true;
+  } catch (e) {
+    toast("No se pudo cargar el generador de Word. Revisa tu conexión e intenta de nuevo.", true);
+    return false;
+  }
+}
+
+async function ensureXLSX() {
+  try {
+    await waitForLib(() => typeof XLSX !== "undefined", "xlsx.js");
+    return true;
+  } catch (e) {
+    toast("No se pudo cargar el generador de Excel. Revisa tu conexión e intenta de nuevo.", true);
+    return false;
+  }
+}
+
+async function exportRecipeExcel(r) {
+  if (!(await ensureXLSX())) return;
   const wb = XLSX.utils.book_new();
   const rows = [
     ["RECETA", r.nombre],
@@ -2328,6 +2502,7 @@ async function fetchImageAsUint8Array(url) {
 }
 
 async function exportRecipeWord(r) {
+  if (!(await ensureDocx())) return;
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, ImageRun } = docx;
 
   const ingRows = [
@@ -2514,9 +2689,16 @@ function renderRecetaListAdmin() {
   const sel = document.getElementById("recetaClientSelect");
   const clientId = sel.value;
   const el = document.getElementById("recetaListAdmin");
-  const recipes = STATE.recipes[clientId] || [];
-  if (recipes.length === 0) {
+  const allRecipes = STATE.recipes[clientId] || [];
+  const query = (document.getElementById("adminRecetaSearch")?.value || "").trim().toLowerCase();
+  const recipes = query ? allRecipes.filter(r => r.nombre.toLowerCase().includes(query)) : allRecipes;
+
+  if (allRecipes.length === 0) {
     el.innerHTML = `<div class="empty-state">Este cliente aún no tiene recetas guardadas.</div>`;
+    return;
+  }
+  if (recipes.length === 0) {
+    el.innerHTML = `<div class="empty-state">No se encontró ninguna receta con ese nombre.</div>`;
     return;
   }
   el.innerHTML = recipes.map(r => `
@@ -2526,6 +2708,7 @@ function renderRecetaListAdmin() {
         <div class="ra-meta">${esc(r.categoria || "Sin categoría")} · ${r.ingredientes.length} ingredientes</div>
       </div>
       <div class="cc-actions">
+        <button class="mini-btn" data-radm="edit" data-id="${r.id}">Editar</button>
         <button class="mini-btn" data-radm="pdf" data-id="${r.id}">PDF</button>
         <button class="mini-btn" data-radm="excel" data-id="${r.id}">Excel</button>
         <button class="mini-btn" data-radm="word" data-id="${r.id}">Word</button>
@@ -2535,9 +2718,10 @@ function renderRecetaListAdmin() {
 
   el.querySelectorAll("[data-radm]").forEach(btn => {
     btn.onclick = () => {
-      const r = recipes.find(x => x.id === btn.dataset.id);
+      const r = allRecipes.find(x => x.id === btn.dataset.id);
       if (btn.dataset.radm === "excel") exportRecipeExcel(r);
       else if (btn.dataset.radm === "word") exportRecipeWord(r);
+      else if (btn.dataset.radm === "edit") openAdminRecipeEditor(r, clientId);
       else exportRecipePdf(r);
     };
   });
@@ -2670,12 +2854,13 @@ function exportRecetarioBrandPdf() {
   setTimeout(() => win.print(), 400);
 }
 
-function exportRecetarioExcel() {
+async function exportRecetarioExcel() {
   const clientId = document.getElementById("recetaClientSelect").value;
   const client = STATE.clients.find(c => c.id === clientId);
   if (!client) { toast("Selecciona un cliente.", true); return; }
   const recipes = STATE.recipes[clientId] || [];
   if (recipes.length === 0) { toast("Este cliente no tiene recetas guardadas.", true); return; }
+  if (!(await ensureXLSX())) return;
 
   const wb = XLSX.utils.book_new();
   recipes.forEach((r, idx) => {
@@ -2710,6 +2895,7 @@ async function exportRecetarioWord() {
   if (!client) { toast("Selecciona un cliente.", true); return; }
   const recipes = STATE.recipes[clientId] || [];
   if (recipes.length === 0) { toast("Este cliente no tiene recetas guardadas.", true); return; }
+  if (!(await ensureDocx())) return;
 
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, PageBreak, ImageRun, AlignmentType } = docx;
 
@@ -2839,6 +3025,17 @@ async function init() {
   });
 
   document.getElementById("logoutBtn").onclick = () => {
+    if (returnToAdminAfterSave) {
+      returnToAdminAfterSave = false;
+      editingRecipeId = null;
+      editingClientId = null;
+      document.getElementById("logoutBtn").textContent = "Salir";
+      document.getElementById("appScreen").classList.add("hidden");
+      document.getElementById("adminScreen").classList.remove("hidden");
+      renderClientList();
+      renderRecetaListAdmin();
+      return;
+    }
     currentClient = null;
     document.getElementById("appScreen").classList.add("hidden");
     document.getElementById("loginScreen").classList.remove("hidden");
@@ -2866,6 +3063,9 @@ async function init() {
   document.getElementById("exportRecetarioPdfBtn").onclick = exportRecetarioBrandPdf;
   document.getElementById("exportRecetarioExcelBtn").onclick = exportRecetarioExcel;
   document.getElementById("exportRecetarioWordBtn").onclick = exportRecetarioWord;
+
+  document.getElementById("savedSearch")?.addEventListener("input", () => renderSavedList());
+  document.getElementById("adminRecetaSearch")?.addEventListener("input", () => renderRecetaListAdmin());
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.onclick = () => {
