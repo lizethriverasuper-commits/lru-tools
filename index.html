@@ -305,7 +305,10 @@
       <div class="new-client-box" style="margin-top:20px; border-color:var(--gold);">
         <div class="section-title" style="margin-top:0;">Respaldo de seguridad</div>
         <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">Descarga una copia completa de todos los clientes, PINs y recetas (sin fotos, solo texto) en un archivo JSON, por si necesitas restaurar algo más adelante.</p>
-        <button class="btn-gold" id="downloadBackupBtn" style="width:100%;">💾 Descargar respaldo completo (JSON)</button>
+        <button class="btn-gold" id="downloadBackupBtn" style="width:100%; margin-bottom:10px;">💾 Descargar respaldo completo (JSON)</button>
+        <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">¿Necesitas recuperar un respaldo anterior? Esto <b>reemplaza todos los datos actuales</b> (clientes, PINs, recetas) por los del archivo — úsalo con cuidado.</p>
+        <button class="mini-btn" id="restoreBackupBtn" style="width:100%; padding:10px;">📤 Restaurar desde respaldo (JSON)</button>
+        <input type="file" id="restoreBackupInput" accept=".json,application/json" class="hidden">
       </div>
     </div>
 
