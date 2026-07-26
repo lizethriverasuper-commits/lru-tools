@@ -2436,9 +2436,7 @@ function renderSavedList() {
       <div class="si-actions">
         <button class="mini-btn" data-action="edit" data-id="${r.id}">Editar</button>
         <button class="mini-btn" data-action="excel" data-id="${r.id}">Excel</button>
-        <button class="mini-btn" data-action="word" data-id="${r.id}">Word</button>
         <button class="mini-btn" data-action="toggle" data-id="${r.id}">${r.active === false ? 'Reactivar' : 'Dar de baja'}</button>
-        <button class="mini-btn" data-action="delete" data-id="${r.id}" style="color:#b3402f;">Eliminar</button>
       </div>
     `;
     list.appendChild(item);
@@ -2446,11 +2444,9 @@ function renderSavedList() {
   list.querySelectorAll("[data-action]").forEach(btn => {
     btn.onclick = () => {
       const r = allRecipes.find(x => x.id === btn.dataset.id);
-      if (btn.dataset.action === "excel") exportRecipeExcel(r);
-      else if (btn.dataset.action === "word") exportRecipeWord(r);
+      if (btn.dataset.action === "excel") exportRecipeExcel(r, currentClient);
       else if (btn.dataset.action === "edit") loadRecipeToForm(r, currentClient.id);
       else if (btn.dataset.action === "toggle") toggleRecipeActive(currentClient.id, r.id, renderSavedList);
-      else if (btn.dataset.action === "delete") deleteRecipeWithConfirm(currentClient.id, r.id, renderSavedList);
     };
   });
 }
@@ -2493,14 +2489,64 @@ async function ensureXLSX() {
   }
 }
 
-async function exportRecipeExcel(r) {
-  if (!(await ensureXLSX())) return;
-  const wb = XLSX.utils.book_new();
+async function ensureExcelJS() {
+  try {
+    await waitForLib(() => typeof ExcelJS !== "undefined", "exceljs.js");
+    return true;
+  } catch (e) {
+    toast("No se pudo cargar el generador de Excel. Revisa tu conexión e intenta de nuevo.", true);
+    return false;
+  }
+}
+
+async function imageUrlToBase64(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(",")[1]); // solo la parte base64, sin el prefijo data:
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("No se pudo convertir imagen a base64", e);
+    return null;
+  }
+}
+
+async function exportRecipeExcel(r, client) {
+  if (!(await ensureExcelJS())) return;
+
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Receta");
+
+  ws.columns = [{ width: 24 }, { width: 42 }, { width: 14 }];
+
+  // Dejar espacio arriba para el logo, si el cliente tiene uno
+  const logoUrl = client ? getClientLogo(client) : null;
+  let startRow = 1;
+  if (logoUrl) {
+    try {
+      const base64 = await imageUrlToBase64(logoUrl);
+      if (base64) {
+        const imgId = workbook.addImage({ base64, extension: "png" });
+        // Esquina superior derecha, tamaño discreto
+        ws.addImage(imgId, { tl: { col: 2.2, row: 0.1 }, ext: { width: 70, height: 70 } });
+        startRow = 5; // dejar aire debajo del logo antes de empezar el contenido
+      }
+    } catch (e) {
+      console.error("No se pudo insertar el logo en el Excel", e);
+    }
+  }
+
+  const fotoNombre = r.foto ? `${slug(r.nombre)}.jpg` : "Sin foto";
   const rows = [
     ["RECETA", r.nombre],
     ["Categoría", r.categoria || ""],
     ["Porciones", r.porciones || ""],
     ["Alérgenos", r.alergenos || ""],
+    ["Foto", fotoNombre],
     [],
     ["INGREDIENTES"],
     ["Ingrediente", "Cantidad", "Unidad"],
@@ -2511,10 +2557,16 @@ async function exportRecipeExcel(r) {
     [],
     ["NOTAS", r.notas || ""],
   ];
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws["!cols"] = [{ wch: 22 }, { wch: 40 }, { wch: 14 }];
-  XLSX.utils.book_append_sheet(wb, ws, "Receta");
-  XLSX.writeFile(wb, `Receta_${slug(r.nombre)}.xlsx`);
+
+  rows.forEach(row => ws.addRow(row.length ? row : [""]));
+  // Mover todo el contenido hacia abajo si hay logo (insertando filas vacías al inicio)
+  if (startRow > 1) {
+    ws.spliceRows(1, 0, ...Array(startRow - 1).fill([]));
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  downloadBlob(blob, `Receta_${slug(r.nombre)}.xlsx`);
   toast("Excel descargado ✓");
 }
 
